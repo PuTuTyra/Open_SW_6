@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>KIS 모의투자 대시보드 (MCP)</title>
+  <style>
+    body {
+      max-width: 900px;
+      margin: 2rem auto;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #111827;
+      color: #e5e7eb;
+    }
+    h1 {
+      font-size: 1.8rem;
+      margin-bottom: 0.5rem;
+    }
+    .card {
+      background: #1f2937;
+      border-radius: 0.75rem;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.75rem;
+      margin-top: 0.5rem;
+    }
+    .summary-item {
+      background: #111827;
+      border-radius: 0.75rem;
+      padding: 0.75rem;
+      text-align: center;
+      font-size: 0.9rem;
+    }
+    .summary-label {
+      color: #9ca3af;
+      margin-bottom: 0.25rem;
+    }
+    .summary-value {
+      font-weight: 600;
+      font-size: 1rem;
+    }
+    .loss {
+      color: #f97373;
+    }
+    .profit {
+      color: #4ade80;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      margin-top: 0.5rem;
+    }
+    th, td {
+      padding: 0.4rem 0.5rem;
+      border-bottom: 1px solid #374151;
+      text-align: right;
+    }
+    th:first-child, td:first-child {
+      text-align: left;
+    }
+    th {
+      color: #9ca3af;
+      font-weight: 500;
+    }
+    .advices li {
+      margin-bottom: 0.25rem;
+    }
+    .advices {
+      padding-left: 1.1rem;
+      margin-top: 0.5rem;
+    }
+    .tag {
+      display: inline-block;
+      font-size: 0.75rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 999px;
+      background: #111827;
+      color: #9ca3af;
+      margin-left: 0.25rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>KIS 모의투자 포트폴리오 대시보드</h1>
+  <p style="color:#9ca3af; margin-bottom:1rem;">
+    MCP 서버 + FastAPI를 통해 가져온 모의투자 계좌 정보를 한 눈에 확인합니다.
+  </p>
+
+  <div class="card" id="summary-card">
+    <h2>계좌 요약</h2>
+    <div class="summary-grid">
+      <div class="summary-item">
+        <div class="summary-label">총 매수금액</div>
+        <div class="summary-value" id="total-cost">-</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">총 평가금액</div>
+        <div class="summary-value" id="total-value">-</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">총 손익</div>
+        <div class="summary-value" id="total-pnl">-</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">총 수익률</div>
+        <div class="summary-value" id="total-pnl-rate">-</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>보유 종목</h2>
+    <table id="positions-table">
+      <thead>
+        <tr>
+          <th>종목명</th>
+          <th>수량</th>
+          <th>평단가</th>
+          <th>현재가</th>
+          <th>손익</th>
+          <th>수익률</th>
+          <th>비중</th>
+        </tr>
+      </thead>
+      <tbody>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>진단 / 추천 코멘트<span class="tag">mock_portfolio_advice</span></h2>
+    <ul class="advices" id="advices-list">
+    </ul>
+  </div>
+
+  <script>
+    function formatNumber(n) {
+      if (n === null || n === undefined) return "-";
+      return n.toLocaleString("ko-KR");
+    }
+
+    function formatPercent(n) {
+      if (n === null || n === undefined) return "-";
+      return n.toFixed(2) + "%";
+    }
+
+    function applyProfitColor(el, value) {
+      if (typeof value !== "number") return;
+      if (value > 0) el.classList.add("profit");
+      else if (value < 0) el.classList.add("loss");
+    }
+
+    async function loadDashboard() {
+      try {
+        const [overviewRes, adviceRes] = await Promise.all([
+          fetch("/portfolio/overview"),
+          fetch("/portfolio/advice"),
+        ]);
+
+        const overview = await overviewRes.json();
+        const advice = await adviceRes.json();
+
+        // 요약 카드
+        const s = overview.summary;
+        const costEl = document.getElementById("total-cost");
+        const valueEl = document.getElementById("total-value");
+        const pnlEl = document.getElementById("total-pnl");
+        const rateEl = document.getElementById("total-pnl-rate");
+
+        costEl.textContent = formatNumber(s.total_cost) + "원";
+        valueEl.textContent = formatNumber(s.total_value) + "원";
+        pnlEl.textContent = formatNumber(s.total_pnl) + "원";
+        rateEl.textContent = formatPercent(s.total_pnl_rate);
+
+        applyProfitColor(pnlEl, s.total_pnl);
+        applyProfitColor(rateEl, s.total_pnl_rate);
+
+        // 포지션 테이블
+        const tbody = document.querySelector("#positions-table tbody");
+        tbody.innerHTML = "";
+        for (const p of overview.positions) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${p.name} (${p.symbol})</td>
+            <td>${p.quantity}</td>
+            <td>${formatNumber(p.avg_price)}</td>
+            <td>${formatNumber(p.current_price)}</td>
+            <td>${formatNumber(p.pnl)}</td>
+            <td>${formatPercent(p.pnl_rate)}</td>
+            <td>${p.weight.toFixed(2)}%</td>
+          `;
+          const pnlCell = tr.children[4];
+          const rateCell = tr.children[5];
+          applyProfitColor(pnlCell, p.pnl);
+          applyProfitColor(rateCell, p.pnl_rate);
+          tbody.appendChild(tr);
+        }
+
+        // 진단 코멘트
+        const advicesEl = document.getElementById("advices-list");
+        advicesEl.innerHTML = "";
+        const advices = advice.advices || [];
+        if (!advices.length) {
+          const li = document.createElement("li");
+          li.textContent = "코멘트가 없습니다.";
+          advicesEl.appendChild(li);
+        } else {
+          advices.forEach((line, idx) => {
+            const li = document.createElement("li");
+            li.textContent = (idx + 1) + ". " + line;
+            advicesEl.appendChild(li);
+          });
+        }
+
+      } catch (err) {
+        console.error(err);
+        alert("대시보드 데이터를 불러오는 중 오류가 발생했습니다. 콘솔을 확인해 주세요.");
+      }
+    }
+
+    window.addEventListener("load", loadDashboard);
+  </script>
+</body>
+</html>
