@@ -45,7 +45,7 @@ def mock_portfolio_advice() -> dict:
     """모의투자 계좌 평가 + 한국어 진단/추천 코멘트를 함께 반환합니다."""
     return analyze_mock_portfolio()
 
-
 if __name__ == "__main__":
-    # ❗ host, port 이런 거 쓰지 말고, 그냥 stdio로만
+    import sys
+    print("🚀 MCP 서버 시작: kis-mock-portfolio (stdio 대기 중)", file=sys.stderr)
     mcp.run(transport="stdio")
